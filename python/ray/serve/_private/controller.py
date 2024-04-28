@@ -1,10 +1,13 @@
 import asyncio
+import atexit
 import logging
 import marshal
 import os
 import pickle
 import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+
+from line_profiler import LineProfiler
 
 import ray
 from ray._private.resource_spec import HEAD_NODE_RESOURCE_NAME
@@ -202,7 +205,19 @@ class ServeController:
         self._shutdown_start_time = None
 
         self._create_control_loop_metrics()
+
+        self.profile = LineProfiler()
+        self.profile.enable()
+
+        async def print_stats():
+            while True:
+                await asyncio.sleep(5)
+                self.profile.print_stats()
+
+        self.profile.add_function(type(self).run_control_loop.__wrapped__)
+        # This doesn't seem to be hitting the right function?
         run_background_task(self.run_control_loop())
+        run_background_task(print_stats())
 
         # The target capacity percentage for all deployments across the cluster.
         self._target_capacity: Optional[float] = None
